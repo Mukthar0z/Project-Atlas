@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateText, Output } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 
@@ -64,12 +64,12 @@ Generate exactly 4 diverse, portfolio-worthy project ideas that match their skil
 Be specific and practical, not generic. Avoid suggesting the same project twice.`;
 
     try {
-      const { experimental_output } = await generateText({
+      const { object } = await generateObject({
         model: gateway("google/gemini-3-flash-preview"),
-        experimental_output: Output.object({ schema: OutputSchema }),
+        schema: OutputSchema,
         prompt,
       });
-      return experimental_output;
+      return object;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("429")) {
