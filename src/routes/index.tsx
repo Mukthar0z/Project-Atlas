@@ -518,3 +518,30 @@ function Block({
     </div>
   );
 }
+
+function ThemeSwitcher({ theme, setTheme }: { theme: ThemeId; setTheme: (t: ThemeId) => void }) {
+  const idx = THEMES.findIndex((t) => t.id === theme);
+  const next = THEMES[(idx + 1) % THEMES.length];
+  const current = THEMES[idx] ?? THEMES[0];
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setTheme(next.id)}
+        title={`Switch to ${next.label}`}
+        className="group inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 transition hover:border-brass/70"
+      >
+        <Palette className="size-3.5 text-muted-foreground transition group-hover:text-brass" />
+        <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:inline">
+          {current.label}
+        </span>
+        <span
+          className="size-3.5 rounded-full ring-1 ring-border"
+          style={{ background: current.swatch }}
+          aria-hidden
+        />
+      </button>
+    </div>
+  );
+}
