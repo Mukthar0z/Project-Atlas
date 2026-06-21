@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Compass, Sparkles, Loader2, MapPin, BookOpen, Wrench, ListChecks, Target, ArrowRight } from "lucide-react";
+import { Compass, Sparkles, Loader2, MapPin, BookOpen, Wrench, ListChecks, Target, ArrowRight, X, Plus, Palette } from "lucide-react";
 import { generateProjects, type AtlasResult } from "@/lib/atlas.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,15 +38,42 @@ const SKILLS: { value: Skill; label: string; hint: string }[] = [
   { value: "advanced", label: "Advanced", hint: "3+ yrs · architecting systems" },
 ];
 
+const MAX_LANGS = 8;
+const SUGGESTED_LANGS = [
+  "JavaScript", "TypeScript", "Python", "Go", "Rust", "Java",
+  "C#", "C++", "Ruby", "PHP", "Swift", "Kotlin", "SQL",
+];
+
+type ThemeId = "atlas" | "aurora" | "ember" | "verdant" | "mono";
+const THEMES: { id: ThemeId; label: string; swatch: string }[] = [
+  { id: "atlas", label: "Atlas", swatch: "oklch(0.78 0.14 70)" },
+  { id: "aurora", label: "Aurora", swatch: "oklch(0.72 0.18 290)" },
+  { id: "ember", label: "Ember", swatch: "oklch(0.68 0.22 25)" },
+  { id: "verdant", label: "Verdant", swatch: "oklch(0.72 0.16 155)" },
+  { id: "mono", label: "Mono", swatch: "oklch(0.85 0 0)" },
+];
+
 function AtlasPage() {
   const [skillLevel, setSkillLevel] = useState<Skill>("intermediate");
-  const [languages, setLanguages] = useState("");
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [langInput, setLangInput] = useState("");
   const [careerGoal, setCareerGoal] = useState("");
   const [result, setResult] = useState<AtlasResult | null>(null);
+  const [theme, setTheme] = useState<ThemeId>(() => {
+    if (typeof window === "undefined") return "atlas";
+    return (localStorage.getItem("atlas-theme") as ThemeId) || "atlas";
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    THEMES.forEach((t) => root.classList.remove(`theme-${t.id}`));
+    root.classList.add(`theme-${theme}`);
+    localStorage.setItem("atlas-theme", theme);
+  }, [theme]);
 
   const generate = useServerFn(generateProjects);
   const mutation = useMutation({
-    mutationFn: (input: { skillLevel: Skill; languages: string; careerGoal: string }) =>
+    mutationFn: (input: { skillLevel: Skill; languages: string[]; careerGoal: string }) =>
       generate({ data: input }),
     onSuccess: (data) => {
       setResult(data);
@@ -59,14 +86,50 @@ function AtlasPage() {
     },
   });
 
+  function addLang(raw: string) {
+    const value = raw.trim().replace(/,$/, "").trim();
+    if (!value) return;
+    if (languages.length >= MAX_LANGS) {
+      toast.error(`Up to ${MAX_LANGS} languages.`);
+      return;
+    }
+    if (languages.some((l) => l.toLowerCase() === value.toLowerCase())) {
+      setLangInput("");
+      return;
+    }
+    setLanguages([...languages, value.slice(0, 40)]);
+    setLangInput("");
+  }
+
+  function removeLang(value: string) {
+    setLanguages(languages.filter((l) => l !== value));
+  }
+
+  function onLangKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === "," || e.key === "Tab") {
+      if (langInput.trim()) {
+        e.preventDefault();
+        addLang(langInput);
+      }
+    } else if (e.key === "Backspace" && !langInput && languages.length) {
+      e.preventDefault();
+      setLanguages(languages.slice(0, -1));
+    }
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!languages.trim() || !careerGoal.trim()) {
-      toast.error("Tell us your languages and your goal.");
+    const finalLangs = langInput.trim()
+      ? [...languages, langInput.trim().slice(0, 40)].slice(0, MAX_LANGS)
+      : languages;
+    if (finalLangs.length === 0 || !careerGoal.trim()) {
+      toast.error("Add at least one language and your goal.");
       return;
     }
     setResult(null);
-    mutation.mutate({ skillLevel, languages: languages.trim(), careerGoal: careerGoal.trim() });
+    setLanguages(finalLangs);
+    setLangInput("");
+    mutation.mutate({ skillLevel, languages: finalLangs, careerGoal: careerGoal.trim() });
   }
 
   return (
@@ -86,12 +149,7 @@ function AtlasPage() {
               </div>
             </div>
           </div>
-          <a
-            href="#chart"
-            className="hidden text-sm text-muted-foreground transition hover:text-foreground sm:inline"
-          >
-            Start charting ↓
-          </a>
+          <ThemeSwitcher theme={theme} setTheme={setTheme} />
         </div>
       </header>
 
@@ -160,16 +218,56 @@ function AtlasPage() {
                   htmlFor="languages"
                   className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground"
                 >
-                  Programming languages
+                  Programming languages <span className="ml-1 normal-case tracking-normal text-foreground/40">({languages.length}/{MAX_LANGS})</span>
                 </Label>
-                <Input
-                  id="languages"
-                  placeholder="e.g. TypeScript, Python, a bit of Rust"
-                  value={languages}
-                  onChange={(e) => setLanguages(e.target.value)}
-                  maxLength={300}
-                  className="mt-3 h-12 border-border bg-input/60 text-base focus-visible:ring-brass"
-                />
+                <div
+                  className="mt-3 flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-input/60 px-2 py-2 focus-within:ring-2 focus-within:ring-brass/70"
+                  onClick={() => document.getElementById("languages")?.focus()}
+                >
+                  {languages.map((l) => (
+                    <span
+                      key={l}
+                      className="inline-flex items-center gap-1 rounded-md bg-brass/15 px-2 py-1 font-mono text-xs text-brass"
+                    >
+                      {l}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeLang(l);
+                        }}
+                        className="text-brass/70 transition hover:text-brass"
+                        aria-label={`Remove ${l}`}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </span>
+                  ))}
+                  <Input
+                    id="languages"
+                    placeholder={languages.length === 0 ? "Type a language, press Enter…" : ""}
+                    value={langInput}
+                    onChange={(e) => setLangInput(e.target.value)}
+                    onKeyDown={onLangKeyDown}
+                    onBlur={() => langInput.trim() && addLang(langInput)}
+                    disabled={languages.length >= MAX_LANGS}
+                    maxLength={40}
+                    className="h-8 min-w-[10ch] flex-1 border-0 bg-transparent p-1 text-sm shadow-none focus-visible:ring-0"
+                  />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {SUGGESTED_LANGS.filter((s) => !languages.some((l) => l.toLowerCase() === s.toLowerCase())).slice(0, 8).map((s) => (
+                    <button
+                      type="button"
+                      key={s}
+                      onClick={() => addLang(s)}
+                      disabled={languages.length >= MAX_LANGS}
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-secondary/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition hover:border-brass/60 hover:text-foreground disabled:opacity-40"
+                    >
+                      <Plus className="size-2.5" /> {s}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
@@ -417,6 +515,33 @@ function Block({
         </h3>
       </div>
       {children}
+    </div>
+  );
+}
+
+function ThemeSwitcher({ theme, setTheme }: { theme: ThemeId; setTheme: (t: ThemeId) => void }) {
+  const idx = THEMES.findIndex((t) => t.id === theme);
+  const next = THEMES[(idx + 1) % THEMES.length];
+  const current = THEMES[idx] ?? THEMES[0];
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setTheme(next.id)}
+        title={`Switch to ${next.label}`}
+        className="group inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1.5 transition hover:border-brass/70"
+      >
+        <Palette className="size-3.5 text-muted-foreground transition group-hover:text-brass" />
+        <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:inline">
+          {current.label}
+        </span>
+        <span
+          className="size-3.5 rounded-full ring-1 ring-border"
+          style={{ background: current.swatch }}
+          aria-hidden
+        />
+      </button>
     </div>
   );
 }

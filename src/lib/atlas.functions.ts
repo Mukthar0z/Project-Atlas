@@ -1,11 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
-import { generateObject } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 
 const InputSchema = z.object({
   skillLevel: z.enum(["beginner", "intermediate", "advanced"]),
-  languages: z.string().min(1).max(300),
+  languages: z.array(z.string().min(1).max(40)).min(1).max(8),
   careerGoal: z.string().min(1).max(500),
 });
 
@@ -48,28 +48,46 @@ export const generateProjects = createServerFn({ method: "POST" })
     const prompt = `A developer wants tailored project ideas.
 
 Skill level: ${data.skillLevel}
-Programming languages they know: ${data.languages}
+Programming languages they know: ${data.languages.join(", ")}
 Career goal: ${data.careerGoal}
 
-Generate exactly 4 diverse, portfolio-worthy project ideas that match their skill level and push them toward their career goal. For each project include:
-- A specific title (not generic)
-- Difficulty (Beginner | Intermediate | Advanced)
-- Realistic estimated time (e.g. "2 weeks", "1 month")
-- A 2-3 sentence description of what it does and why it matters for their goal
-- A concrete tech stack using languages they know
-- 4-6 key features to build
-- A learning roadmap of 5-7 ordered steps (each step has a short title and a one-sentence detail)
-- 3-5 learning resources (real-ish types like "Official docs", "YouTube series", "Book chapter") with a short note on what to learn from each
+Generate exactly 4 diverse, portfolio-worthy project ideas matched to their skill level and career goal. Be specific and practical; avoid duplicates.
 
-Be specific and practical, not generic. Avoid suggesting the same project twice.`;
+Respond with ONLY valid minified JSON (no markdown fences, no commentary) matching this exact shape:
+{"projects":[{"title":string,"difficulty":"Beginner"|"Intermediate"|"Advanced","estimatedTime":string,"description":string,"techStack":string[],"features":string[],"roadmap":[{"step":string,"detail":string}],"resources":[{"title":string,"type":string,"note":string}]}]}
+
+Rules:
+- title: specific, not generic
+- estimatedTime: e.g. "2 weeks", "1 month"
+- description: 2-3 sentences explaining what it does and why it matters for the goal
+- techStack: concrete tools, mostly using languages they listed
+- features: 4-6 key features
+- roadmap: 5-7 ordered steps, each with a short step title and one-sentence detail
+- resources: 3-5 items; type is e.g. "Docs", "YouTube", "Book", "Course", "Blog"`;
 
     try {
-      const { object } = await generateObject({
+      const { text } = await generateText({
         model: gateway("google/gemini-3-flash-preview"),
-        schema: OutputSchema,
         prompt,
       });
-      return object;
+
+      const cleaned = text
+        .trim()
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch {
+        // Try to extract the first {...} block
+        const match = cleaned.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error("AI returned an unreadable response. Please try again.");
+        parsed = JSON.parse(match[0]);
+      }
+
+      return OutputSchema.parse(parsed);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("429")) {
@@ -78,6 +96,7 @@ Be specific and practical, not generic. Avoid suggesting the same project twice.
       if (msg.includes("402")) {
         throw new Error("AI credits exhausted. Add credits in your workspace billing settings.");
       }
-      throw new Error("Failed to generate projects. Please try again.");
+      console.error("Atlas generate error:", err);
+      throw new Error(msg || "Failed to generate projects. Please try again.");
     }
   });
