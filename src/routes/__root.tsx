@@ -80,10 +80,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Project Atlas — AI-charted projects for your coding journey" },
       { name: "description", content: "Tell Project Atlas your skills and goals. Get tailored project ideas, a learning roadmap, and curated resources." },
       { property: "og:title", content: "Project Atlas — AI-charted projects for your coding journey" },
-      { property: "og:description", content: "Tailored project ideas, roadmaps, and resources for developers." },
+      { property: "og:description", content: "Tell Project Atlas your skills and goals. Get tailored project ideas, a learning roadmap, and curated resources." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Project Atlas — AI-charted projects for your coding journey" },
+      { name: "twitter:description", content: "Tell Project Atlas your skills and goals. Get tailored project ideas, a learning roadmap, and curated resources." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6d931095-509c-414a-ac5c-993cef78acca/id-preview-515cce8e--ea39ff48-1442-4966-8473-75982b12c144.lovable.app-1783089073723.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6d931095-509c-414a-ac5c-993cef78acca/id-preview-515cce8e--ea39ff48-1442-4966-8473-75982b12c144.lovable.app-1783089073723.png" },
     ],
     links: [
       {
