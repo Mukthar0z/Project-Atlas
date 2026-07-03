@@ -5,3 +5,4 @@ AI-powered project idea generator for developers.
 Project Atlas helps developers discover meaningful projects based on their current programming skills, experience level, and career goals. Instead of wondering "What should I build next?", Atlas creates personalized project ideas, learning roadmaps, recommended technologies, and curated resources that match your current level.
 
 Whether you're learning to code, preparing for interviews, building a portfolio, or expanding your expertise, Project Atlas helps you chart your next build-worthy project.
+Links:https://skill-path-finder-69.lovable.app
