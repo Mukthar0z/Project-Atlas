@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { generateText } from "ai";
 import { z } from "zod";
+import { jsonrepair } from "jsonrepair";
 import { createLovableAiGatewayProvider } from "./ai-gateway.server";
 
 const InputSchema = z.object({
@@ -11,28 +12,33 @@ const InputSchema = z.object({
 
 const ProjectSchema = z.object({
   title: z.string(),
-  difficulty: z.enum(["Beginner", "Intermediate", "Advanced"]),
-  estimatedTime: z.string(),
+  difficulty: z.string().transform((v) => {
+    const s = v.trim().toLowerCase();
+    if (s.startsWith("beg")) return "Beginner" as const;
+    if (s.startsWith("adv")) return "Advanced" as const;
+    return "Intermediate" as const;
+  }),
+  estimatedTime: z.string().default("2-4 weeks"),
   description: z.string(),
-  techStack: z.array(z.string()),
-  features: z.array(z.string()),
+  techStack: z.array(z.string()).default([]),
+  features: z.array(z.string()).default([]),
   roadmap: z.array(
     z.object({
       step: z.string(),
-      detail: z.string(),
+      detail: z.string().default(""),
     }),
-  ),
+  ).default([]),
   resources: z.array(
     z.object({
       title: z.string(),
-      type: z.string(),
-      note: z.string(),
+      type: z.string().default("Link"),
+      note: z.string().default(""),
     }),
-  ),
+  ).default([]),
 });
 
 const OutputSchema = z.object({
-  projects: z.array(ProjectSchema).min(3).max(5),
+  projects: z.array(ProjectSchema).min(1),
 });
 
 export type AtlasResult = z.infer<typeof OutputSchema>;
@@ -71,23 +77,34 @@ Rules:
         prompt,
       });
 
-      const cleaned = text
-        .trim()
-        .replace(/^```(?:json)?\s*/i, "")
-        .replace(/\s*```$/i, "")
-        .trim();
+      // Strip markdown fences and any leading/trailing prose, then repair.
+      let cleaned = text.trim();
+      const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence) cleaned = fence[1].trim();
+      const firstBrace = cleaned.indexOf("{");
+      const lastBrace = cleaned.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+      }
 
       let parsed: unknown;
       try {
         parsed = JSON.parse(cleaned);
       } catch {
-        // Try to extract the first {...} block
-        const match = cleaned.match(/\{[\s\S]*\}/);
-        if (!match) throw new Error("AI returned an unreadable response. Please try again.");
-        parsed = JSON.parse(match[0]);
+        try {
+          parsed = JSON.parse(jsonrepair(cleaned));
+        } catch {
+          console.error("Atlas: failed to parse AI output:", text.slice(0, 500));
+          throw new Error("AI returned an unreadable response. Please try again.");
+        }
       }
 
-      return OutputSchema.parse(parsed);
+      const result = OutputSchema.safeParse(parsed);
+      if (!result.success) {
+        console.error("Atlas: schema mismatch:", result.error.issues, "raw:", JSON.stringify(parsed).slice(0, 500));
+        throw new Error("AI returned an incomplete response. Please try again.");
+      }
+      return result.data;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("429")) {
